@@ -1,7 +1,7 @@
 {
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "outputDirectory": "build",
+  "outputDirectory": "dist",
   "env": {
     "NPM_CONFIG_OPTIONAL": "true",
     "ROLLUP_DISABLE_NATIVE": "1"
