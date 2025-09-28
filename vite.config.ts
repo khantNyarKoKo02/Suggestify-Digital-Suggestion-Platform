@@ -14,20 +14,7 @@
     build: {
       target: 'esnext',
       outDir: 'dist',
-      chunkSizeWarningLimit: 1000,
-      rollupOptions: {
-        output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('react')) return 'react';
-              if (id.includes('@radix-ui')) return 'radix';
-              if (id.includes('recharts')) return 'recharts';
-              if (id.includes('@supabase')) return 'supabase';
-              return 'vendor';
-            }
-          },
-        },
-      },
+      sourcemap: true,
     },
     server: {
       host: '127.0.0.1',
