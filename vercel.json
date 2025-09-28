@@ -6,7 +6,8 @@
     "NPM_CONFIG_OPTIONAL": "true",
     "ROLLUP_DISABLE_NATIVE": "1"
   },
-  "rewrites": [
-    { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
   ]
 }
