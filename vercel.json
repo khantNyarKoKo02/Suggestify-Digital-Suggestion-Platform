@@ -2,6 +2,10 @@
   "installCommand": "npm ci || npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "build",
+  "env": {
+    "NPM_CONFIG_OPTIONAL": "true",
+    "ROLLUP_DISABLE_NATIVE": "1"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
