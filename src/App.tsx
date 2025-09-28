@@ -12,12 +12,12 @@ export default function App() {
 
   useEffect(() => {
     checkSession()
-    
+
     // Listen for browser navigation
     const handlePopState = () => {
       setCurrentPath(window.location.pathname)
     }
-    
+
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
@@ -68,7 +68,7 @@ export default function App() {
   const pathParts = currentPath.split('/')
   console.log('Current path:', currentPath)
   console.log('Path parts:', pathParts)
-  
+
   // Public submission page: /submit/:boxId
   if (pathParts[1] === 'submit' && pathParts[2]) {
     console.log('Routing to PublicSubmissionPage with boxId:', pathParts[2])
