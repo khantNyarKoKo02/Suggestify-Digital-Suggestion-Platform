@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Separator } from './ui/separator'
-import { Plus, Settings, MessageSquare, Download, Star, Eye, Trash2 } from 'lucide-react'
+import { Plus, Settings, MessageSquare, Download, Star, Eye, Trash2, Edit } from 'lucide-react'
 import { toast } from 'sonner'
 import { CreateBoxForm } from './CreateBoxForm'
 import { SuggestionsManager } from './SuggestionsManager'
@@ -95,10 +95,48 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       const result = await response.json()
       setBoxes([...boxes, result.box])
       setShowCreateForm(false)
+      setSelectedBox(null)
       toast.success('Suggestion box created successfully!')
     } catch (error) {
       console.error('Create box error:', error)
       toast.error('Failed to create suggestion box')
+    }
+  }
+
+  const handleUpdateBox = async (boxData: { title: string; description: string; color: string }) => {
+    if (!selectedBox) return
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error('Please login again')
+        onLogout()
+        return
+      }
+
+      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestion-boxes/${selectedBox.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(boxData)
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        toast.error('Failed to update suggestion box: ' + error.error)
+        return
+      }
+
+      const result = await response.json()
+      setBoxes(boxes.map(box => box.id === selectedBox.id ? result.box : box))
+      setShowCreateForm(false)
+      setSelectedBox(null)
+      toast.success('Suggestion box updated successfully!')
+    } catch (error) {
+      console.error('Update box error:', error)
+      toast.error('Failed to update suggestion box')
     }
   }
 
@@ -166,7 +204,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
       a.click()
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
-      
+
       toast.success('Suggestions exported successfully!')
     } catch (error) {
       console.error('Export error:', error)
@@ -192,10 +230,15 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   }
 
   if (showCreateForm) {
+    const isEditMode = !!selectedBox
     return (
       <CreateBoxForm
-        onSubmit={handleCreateBox}
-        onCancel={() => setShowCreateForm(false)}
+        onSubmit={isEditMode ? handleUpdateBox : handleCreateBox}
+        onCancel={() => {
+          setShowCreateForm(false)
+          setSelectedBox(null)
+        }}
+        box={selectedBox}
       />
     )
   }
@@ -236,7 +279,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
               <h2 className="text-2xl text-gray-900">Your Suggestion Boxes</h2>
               <p className="text-gray-600">Manage your feedback collection channels</p>
             </div>
-            <Button onClick={() => setShowCreateForm(true)} className="flex items-center gap-2">
+            <Button onClick={() => {
+              setSelectedBox(null)
+              setShowCreateForm(true)
+            }} className="flex items-center gap-2">
               <Plus className="h-4 w-4" />
               Create New Box
             </Button>
@@ -248,7 +294,10 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                 <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg text-gray-900 mb-2">No suggestion boxes yet</h3>
                 <p className="text-gray-600 mb-4">Create your first suggestion box to start collecting feedback</p>
-                <Button onClick={() => setShowCreateForm(true)}>
+                <Button onClick={() => {
+                  setSelectedBox(null)
+                  setShowCreateForm(true)
+                }}>
                   Create Your First Box
                 </Button>
               </CardContent>
@@ -274,9 +323,9 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                       <Badge variant="secondary" className="text-xs">
                         Created {new Date(box.created_at).toLocaleDateString()}
                       </Badge>
-                      
+
                       <Separator />
-                      
+
                       <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"
@@ -290,7 +339,20 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           <Eye className="h-3 w-3" />
                           View
                         </Button>
-                        
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBox(box)
+                            setShowCreateForm(true)
+                          }}
+                          className="flex items-center gap-1"
+                        >
+                          <Edit className="h-3 w-3" />
+                          Edit
+                        </Button>
+
                         <Button
                           variant="outline"
                           size="sm"
@@ -300,7 +362,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           <Settings className="h-3 w-3" />
                           QR Code
                         </Button>
-                        
+
                         <Button
                           variant="outline"
                           size="sm"
@@ -310,7 +372,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           <Download className="h-3 w-3" />
                           Export
                         </Button>
-                        
+
                         <Button
                           variant="outline"
                           size="sm"

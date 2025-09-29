@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -17,17 +17,39 @@ const colorOptions = [
   { name: 'Teal', value: '#14B8A6' },
 ]
 
+interface SuggestionBox {
+  id: string
+  title: string
+  description: string
+  color: string
+  created_at: string
+  owner_id: string
+}
+
 interface CreateBoxFormProps {
   onSubmit: (data: { title: string; description: string; color: string }) => void
   onCancel: () => void
+  box?: SuggestionBox | null // Optional box for edit mode
 }
 
-export function CreateBoxForm({ onSubmit, onCancel }: CreateBoxFormProps) {
+export function CreateBoxForm({ onSubmit, onCancel, box }: CreateBoxFormProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     color: '#3B82F6'
   })
+
+  const isEditMode = !!box
+
+  useEffect(() => {
+    if (box) {
+      setFormData({
+        title: box.title,
+        description: box.description,
+        color: box.color
+      })
+    }
+  }, [box])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -44,7 +66,9 @@ export function CreateBoxForm({ onSubmit, onCancel }: CreateBoxFormProps) {
               <ArrowLeft className="h-4 w-4" />
               Back
             </Button>
-            <h1 className="text-xl text-gray-900">Create New Suggestion Box</h1>
+            <h1 className="text-xl text-gray-900">
+              {isEditMode ? 'Edit Suggestion Box' : 'Create New Suggestion Box'}
+            </h1>
           </div>
         </div>
       </header>
@@ -54,7 +78,10 @@ export function CreateBoxForm({ onSubmit, onCancel }: CreateBoxFormProps) {
           <CardHeader>
             <CardTitle>Box Configuration</CardTitle>
             <CardDescription>
-              Set up your new suggestion box with a title, description, and theme color
+              {isEditMode
+                ? 'Update your suggestion box settings'
+                : 'Set up your new suggestion box with a title, description, and theme color'
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -91,8 +118,8 @@ export function CreateBoxForm({ onSubmit, onCancel }: CreateBoxFormProps) {
                       onClick={() => setFormData({ ...formData, color: color.value })}
                       className={`
                         flex items-center gap-2 p-3 rounded-lg border-2 transition-all
-                        ${formData.color === color.value 
-                          ? 'border-gray-400 bg-gray-50' 
+                        ${formData.color === color.value
+                          ? 'border-gray-400 bg-gray-50'
                           : 'border-gray-200 hover:border-gray-300'
                         }
                       `}
@@ -109,7 +136,7 @@ export function CreateBoxForm({ onSubmit, onCancel }: CreateBoxFormProps) {
 
               <div className="border rounded-lg p-4 bg-gray-50">
                 <h4 className="text-sm text-gray-700 mb-2">Preview</h4>
-                <div 
+                <div
                   className="p-4 rounded-lg border-2 bg-white"
                   style={{ borderColor: formData.color }}
                 >
@@ -124,7 +151,7 @@ export function CreateBoxForm({ onSubmit, onCancel }: CreateBoxFormProps) {
 
               <div className="flex gap-3 pt-4">
                 <Button type="submit" className="flex-1">
-                  Create Suggestion Box
+                  {isEditMode ? 'Update Suggestion Box' : 'Create Suggestion Box'}
                 </Button>
                 <Button type="button" variant="outline" onClick={onCancel}>
                   Cancel

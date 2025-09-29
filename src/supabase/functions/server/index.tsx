@@ -1,3 +1,5 @@
+// @ts-nocheck
+// This is a Deno Edge Function - TypeScript errors are expected in VS Code
 import { Hono } from 'npm:hono'
 import { cors } from 'npm:hono/cors'
 import { logger } from 'npm:hono/logger'
@@ -20,13 +22,13 @@ async function verifyAuth(request: Request) {
   if (!accessToken) {
     return null;
   }
-  
+
   const { data: { user }, error } = await supabase.auth.getUser(accessToken);
   if (error || !user) {
     console.log('Authorization error:', error);
     return null;
   }
-  
+
   return user;
 }
 
@@ -86,7 +88,7 @@ app.post('/make-server-01962606/suggestion-boxes', async (c) => {
     }
 
     await kv.set(`suggestion_box_${boxId}`, boxData)
-    
+
     // Add to user's boxes list
     const userBoxes = await kv.get(`user_boxes_${user.id}`) || []
     userBoxes.push(boxId)
@@ -127,7 +129,7 @@ app.get('/make-server-01962606/suggestion-boxes/:id', async (c) => {
   try {
     const boxId = c.req.param('id')
     const box = await kv.get(`suggestion_box_${boxId}`)
-    
+
     if (!box) {
       return c.json({ error: 'Suggestion box not found' }, 404)
     }
@@ -148,7 +150,7 @@ app.delete('/make-server-01962606/suggestion-boxes/:id', async (c) => {
 
     const boxId = c.req.param('id')
     const box = await kv.get(`suggestion_box_${boxId}`)
-    
+
     if (!box) {
       return c.json({ error: 'Suggestion box not found' }, 404)
     }
@@ -159,7 +161,7 @@ app.delete('/make-server-01962606/suggestion-boxes/:id', async (c) => {
 
     // Delete the box
     await kv.del(`suggestion_box_${boxId}`)
-    
+
     // Remove from user's boxes list
     const userBoxes = await kv.get(`user_boxes_${user.id}`) || []
     const updatedBoxes = userBoxes.filter((id: string) => id !== boxId)
@@ -174,6 +176,48 @@ app.delete('/make-server-01962606/suggestion-boxes/:id', async (c) => {
     return c.json({ success: true })
   } catch (error) {
     console.log('Delete suggestion box error:', error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+app.put('/make-server-01962606/suggestion-boxes/:id', async (c) => {
+  try {
+    const user = await verifyAuth(c.req.raw);
+    if (!user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const boxId = c.req.param('id')
+    const body = await c.req.json()
+    const { title, description, color } = body
+
+    if (!title) {
+      return c.json({ error: 'Title is required' }, 400)
+    }
+
+    const box = await kv.get(`suggestion_box_${boxId}`)
+
+    if (!box) {
+      return c.json({ error: 'Suggestion box not found' }, 404)
+    }
+
+    if (box.owner_id !== user.id) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+
+    // Update the box data
+    const updatedBoxData = {
+      ...box,
+      title,
+      description: description || '',
+      color: color || '#3B82F6'
+    }
+
+    await kv.set(`suggestion_box_${boxId}`, updatedBoxData)
+
+    return c.json({ box: updatedBoxData })
+  } catch (error) {
+    console.log('Update suggestion box error:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
 })
@@ -221,7 +265,7 @@ app.get('/make-server-01962606/suggestions/:boxId', async (c) => {
     }
 
     const boxId = c.req.param('boxId')
-    
+
     // Verify user owns this box
     const box = await kv.get(`suggestion_box_${boxId}`)
     if (!box || box.owner_id !== user.id) {
@@ -254,7 +298,7 @@ app.post('/make-server-01962606/suggestions/:suggestionId/rate', async (c) => {
     // Find the suggestion
     const suggestions = await kv.getByPrefix(`suggestion_`)
     const suggestion = suggestions.find(s => s.id === suggestionId)
-    
+
     if (!suggestion) {
       return c.json({ error: 'Suggestion not found' }, 404)
     }
@@ -284,7 +328,7 @@ app.get('/make-server-01962606/export/:boxId', async (c) => {
     }
 
     const boxId = c.req.param('boxId')
-    
+
     // Verify user owns this box
     const box = await kv.get(`suggestion_box_${boxId}`)
     if (!box || box.owner_id !== user.id) {
@@ -292,13 +336,13 @@ app.get('/make-server-01962606/export/:boxId', async (c) => {
     }
 
     const suggestions = await kv.getByPrefix(`suggestion_${boxId}_`)
-    
+
     // Generate CSV content
     const csvHeader = 'ID,Content,Rating,Admin Rating,Anonymous,Created At\n'
-    const csvRows = suggestions.map(s => 
+    const csvRows = suggestions.map(s =>
       `"${s.id}","${s.content.replace(/"/g, '""')}","${s.rating || ''}","${s.admin_rating || ''}","${s.is_anonymous}","${s.created_at}"`
     ).join('\n')
-    
+
     const csvContent = csvHeader + csvRows
 
     return new Response(csvContent, {
