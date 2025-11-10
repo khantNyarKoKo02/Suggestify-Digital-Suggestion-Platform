@@ -42,27 +42,19 @@ export function SuggestionsManager({ box, onBack, onLogout }: SuggestionsManager
 
   const loadSuggestions = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        toast.error('Please login again')
-        onLogout()
+      const { data, error } = await supabase
+        .from('suggestions')
+        .select('*')
+        .eq('box_id', box.id)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Load suggestions error:', error)
+        toast.error('Failed to load suggestions: ' + error.message)
         return
       }
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestions/${box.id}`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to load suggestions: ' + error.error)
-        return
-      }
-
-      const result = await response.json()
-      setSuggestions(result.suggestions)
+      setSuggestions(data || [])
     } catch (error) {
       console.error('Load suggestions error:', error)
       toast.error('Failed to load suggestions')
@@ -73,31 +65,21 @@ export function SuggestionsManager({ box, onBack, onLogout }: SuggestionsManager
 
   const handleRateSuggestion = async (suggestionId: string, rating: number) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        toast.error('Please login again')
-        onLogout()
+      const { data, error } = await supabase
+        .from('suggestions')
+        .update({ admin_rating: rating })
+        .eq('id', suggestionId)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Rate suggestion error:', error)
+        toast.error('Failed to rate suggestion: ' + error.message)
         return
       }
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestions/${suggestionId}/rate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ rating })
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to rate suggestion: ' + error.error)
-        return
-      }
-
-      const result = await response.json()
       setSuggestions(suggestions.map(s => 
-        s.id === suggestionId ? result.suggestion : s
+        s.id === suggestionId ? data : s
       ))
       toast.success('Rating saved!')
     } catch (error) {

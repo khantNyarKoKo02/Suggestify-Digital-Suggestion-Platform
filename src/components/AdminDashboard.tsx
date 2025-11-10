@@ -29,6 +29,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   const [boxes, setBoxes] = useState<SuggestionBox[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [editingBox, setEditingBox] = useState<SuggestionBox | null>(null)
   const [selectedBox, setSelectedBox] = useState<SuggestionBox | null>(null)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [showQRCode, setShowQRCode] = useState<string | null>(null)
@@ -39,27 +40,18 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   const loadBoxes = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        toast.error('Please login again')
-        onLogout()
+      const { data, error } = await supabase
+        .from('suggestion_boxes')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Load boxes error:', error)
+        toast.error('Failed to load suggestion boxes: ' + error.message)
         return
       }
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestion-boxes`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to load suggestion boxes: ' + error.error)
-        return
-      }
-
-      const result = await response.json()
-      setBoxes(result.boxes)
+      setBoxes(data || [])
     } catch (error) {
       console.error('Load boxes error:', error)
       toast.error('Failed to load suggestion boxes')
@@ -70,30 +62,31 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   const handleCreateBox = async (boxData: { title: string; description: string; color: string }) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
         toast.error('Please login again')
         onLogout()
         return
       }
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestion-boxes`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(boxData)
-      })
+      const { data, error } = await supabase
+        .from('suggestion_boxes')
+        .insert({
+          owner_id: user.id,
+          title: boxData.title,
+          description: boxData.description || '',
+          color: boxData.color || '#3B82F6'
+        })
+        .select()
+        .single()
 
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to create suggestion box: ' + error.error)
+      if (error) {
+        console.error('Create box error:', error)
+        toast.error('Failed to create suggestion box: ' + error.message)
         return
       }
 
-      const result = await response.json()
-      setBoxes([...boxes, result.box])
+      setBoxes([data, ...boxes])
       setShowCreateForm(false)
       setSelectedBox(null)
       toast.success('Suggestion box created successfully!')
@@ -104,35 +97,28 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
   }
 
   const handleUpdateBox = async (boxData: { title: string; description: string; color: string }) => {
-    if (!selectedBox) return
+    if (!editingBox) return
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        toast.error('Please login again')
-        onLogout()
+      const { data, error } = await supabase
+        .from('suggestion_boxes')
+        .update({
+          title: boxData.title,
+          description: boxData.description || '',
+          color: boxData.color || '#3B82F6'
+        })
+        .eq('id', editingBox.id)
+        .select()
+        .single()
+
+      if (error) {
+        console.error('Update box error:', error)
+        toast.error('Failed to update suggestion box: ' + error.message)
         return
       }
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestion-boxes/${selectedBox.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(boxData)
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to update suggestion box: ' + error.error)
-        return
-      }
-
-      const result = await response.json()
-      setBoxes(boxes.map(box => box.id === selectedBox.id ? result.box : box))
-      setShowCreateForm(false)
-      setSelectedBox(null)
+      setBoxes(boxes.map(box => box.id === editingBox.id ? data : box))
+      setEditingBox(null)
       toast.success('Suggestion box updated successfully!')
     } catch (error) {
       console.error('Update box error:', error)
@@ -146,23 +132,14 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        toast.error('Please login again')
-        onLogout()
-        return
-      }
+      const { error } = await supabase
+        .from('suggestion_boxes')
+        .delete()
+        .eq('id', boxId)
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestion-boxes/${boxId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to delete suggestion box: ' + error.error)
+      if (error) {
+        console.error('Delete box error:', error)
+        toast.error('Failed to delete suggestion box: ' + error.message)
         return
       }
 
@@ -176,26 +153,28 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
 
   const handleExportCSV = async (boxId: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        toast.error('Please login again')
-        onLogout()
+      const { data: suggestions, error } = await supabase
+        .from('suggestions')
+        .select('*')
+        .eq('box_id', boxId)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Export error:', error)
+        toast.error('Failed to export suggestions: ' + error.message)
         return
       }
 
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/export/${boxId}`, {
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      })
+      // Generate CSV content
+      const csvHeader = 'ID,Content,Rating,Admin Rating,Anonymous,Created At\n'
+      const csvRows = (suggestions || []).map(s => 
+        `"${s.id}","${s.content.replace(/"/g, '""')}","${s.rating || ''}","${s.admin_rating || ''}","${s.is_anonymous}","${s.created_at}"`
+      ).join('\n')
+      
+      const csvContent = csvHeader + csvRows
 
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to export suggestions: ' + error.error)
-        return
-      }
-
-      const blob = await response.blob()
+      // Download the file
+      const blob = new Blob([csvContent], { type: 'text/csv' })
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -239,6 +218,16 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
           setSelectedBox(null)
         }}
         box={selectedBox}
+      />
+    )
+  }
+
+  if (editingBox) {
+    return (
+      <CreateBoxForm
+        editBox={editingBox}
+        onSubmit={handleUpdateBox}
+        onCancel={() => setEditingBox(null)}
       />
     )
   }
@@ -353,6 +342,16 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           Edit
                         </Button>
 
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingBox(box)}
+                          className="flex items-center gap-1"
+                        >
+                          <Edit className="h-3 w-3" />
+                          Edit
+                        </Button>
+                        
                         <Button
                           variant="outline"
                           size="sm"

@@ -29,27 +29,25 @@ interface SuggestionBox {
 interface CreateBoxFormProps {
   onSubmit: (data: { title: string; description: string; color: string }) => void
   onCancel: () => void
-  box?: SuggestionBox | null // Optional box for edit mode
+  editBox?: SuggestionBox | null
 }
 
-export function CreateBoxForm({ onSubmit, onCancel, box }: CreateBoxFormProps) {
+export function CreateBoxForm({ onSubmit, onCancel, editBox }: CreateBoxFormProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     color: '#3B82F6'
   })
 
-  const isEditMode = !!box
-
   useEffect(() => {
-    if (box) {
+    if (editBox) {
       setFormData({
-        title: box.title,
-        description: box.description,
-        color: box.color
+        title: editBox.title,
+        description: editBox.description,
+        color: editBox.color
       })
     }
-  }, [box])
+  }, [editBox])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,7 +65,7 @@ export function CreateBoxForm({ onSubmit, onCancel, box }: CreateBoxFormProps) {
               Back
             </Button>
             <h1 className="text-xl text-gray-900">
-              {isEditMode ? 'Edit Suggestion Box' : 'Create New Suggestion Box'}
+              {editBox ? 'Edit Suggestion Box' : 'Create New Suggestion Box'}
             </h1>
           </div>
         </div>
@@ -78,8 +76,8 @@ export function CreateBoxForm({ onSubmit, onCancel, box }: CreateBoxFormProps) {
           <CardHeader>
             <CardTitle>Box Configuration</CardTitle>
             <CardDescription>
-              {isEditMode
-                ? 'Update your suggestion box settings'
+              {editBox 
+                ? 'Update your suggestion box details' 
                 : 'Set up your new suggestion box with a title, description, and theme color'
               }
             </CardDescription>
@@ -151,7 +149,7 @@ export function CreateBoxForm({ onSubmit, onCancel, box }: CreateBoxFormProps) {
 
               <div className="flex gap-3 pt-4">
                 <Button type="submit" className="flex-1">
-                  {isEditMode ? 'Update Suggestion Box' : 'Create Suggestion Box'}
+                  {editBox ? 'Update Suggestion Box' : 'Create Suggestion Box'}
                 </Button>
                 <Button type="button" variant="outline" onClick={onCancel}>
                   Cancel

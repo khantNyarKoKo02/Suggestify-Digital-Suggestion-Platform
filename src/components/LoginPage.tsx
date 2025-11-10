@@ -49,28 +49,26 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true)
 
     try {
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/auth/signup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${publicAnonKey}`
-        },
-        body: JSON.stringify({
-          email: signupForm.email,
-          password: signupForm.password,
-          name: signupForm.name
-        })
+      // Use Supabase Auth directly
+      const { data, error } = await supabase.auth.signUp({
+        email: signupForm.email,
+        password: signupForm.password,
+        options: {
+          data: {
+            name: signupForm.name
+          }
+        }
       })
 
-      const result = await response.json()
-
-      if (!response.ok) {
-        toast.error('Signup failed: ' + result.error)
+      if (error) {
+        toast.error('Signup failed: ' + error.message)
         return
       }
 
-      toast.success('Account created successfully! Please login.')
-      setSignupForm({ name: '', email: '', password: '' })
+      if (data.user) {
+        toast.success('Account created successfully! Please login.')
+        setSignupForm({ name: '', email: '', password: '' })
+      }
     } catch (error) {
       console.error('Signup error:', error)
       toast.error('Signup failed. Please try again.')

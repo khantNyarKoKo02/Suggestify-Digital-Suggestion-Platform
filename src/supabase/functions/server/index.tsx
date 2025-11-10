@@ -4,7 +4,6 @@ import { Hono } from 'npm:hono'
 import { cors } from 'npm:hono/cors'
 import { logger } from 'npm:hono/logger'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import * as kv from './kv_store.tsx'
 
 const app = new Hono()
 
@@ -77,24 +76,23 @@ app.post('/make-server-01962606/suggestion-boxes', async (c) => {
       return c.json({ error: 'Title is required' }, 400)
     }
 
-    const boxId = crypto.randomUUID()
-    const boxData = {
-      id: boxId,
-      owner_id: user.id,
-      title,
-      description: description || '',
-      color: color || '#3B82F6',
-      created_at: new Date().toISOString()
+    const { data, error } = await supabase
+      .from('suggestion_boxes')
+      .insert({
+        owner_id: user.id,
+        title,
+        description: description || '',
+        color: color || '#3B82F6'
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.log('Create suggestion box error:', error)
+      return c.json({ error: error.message }, 500)
     }
 
-    await kv.set(`suggestion_box_${boxId}`, boxData)
-
-    // Add to user's boxes list
-    const userBoxes = await kv.get(`user_boxes_${user.id}`) || []
-    userBoxes.push(boxId)
-    await kv.set(`user_boxes_${user.id}`, userBoxes)
-
-    return c.json({ box: boxData })
+    return c.json({ box: data })
   } catch (error) {
     console.log('Create suggestion box error:', error)
     return c.json({ error: 'Internal server error' }, 500)
@@ -108,17 +106,18 @@ app.get('/make-server-01962606/suggestion-boxes', async (c) => {
       return c.json({ error: 'Unauthorized' }, 401);
     }
 
-    const userBoxes = await kv.get(`user_boxes_${user.id}`) || []
-    const boxes = []
+    const { data, error } = await supabase
+      .from('suggestion_boxes')
+      .select('*')
+      .eq('owner_id', user.id)
+      .order('created_at', { ascending: false })
 
-    for (const boxId of userBoxes) {
-      const box = await kv.get(`suggestion_box_${boxId}`)
-      if (box) {
-        boxes.push(box)
-      }
+    if (error) {
+      console.log('Get suggestion boxes error:', error)
+      return c.json({ error: error.message }, 500)
     }
 
-    return c.json({ boxes })
+    return c.json({ boxes: data })
   } catch (error) {
     console.log('Get suggestion boxes error:', error)
     return c.json({ error: 'Internal server error' }, 500)
@@ -128,15 +127,69 @@ app.get('/make-server-01962606/suggestion-boxes', async (c) => {
 app.get('/make-server-01962606/suggestion-boxes/:id', async (c) => {
   try {
     const boxId = c.req.param('id')
-    const box = await kv.get(`suggestion_box_${boxId}`)
-
-    if (!box) {
+    
+    const { data, error } = await supabase
+      .from('suggestion_boxes')
+      .select('*')
+      .eq('id', boxId)
+      .single()
+    
+    if (error || !data) {
       return c.json({ error: 'Suggestion box not found' }, 404)
     }
 
-    return c.json({ box })
+    return c.json({ box: data })
   } catch (error) {
     console.log('Get suggestion box error:', error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
+app.put('/make-server-01962606/suggestion-boxes/:id', async (c) => {
+  try {
+    const user = await verifyAuth(c.req.raw);
+    if (!user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const boxId = c.req.param('id')
+    const body = await c.req.json()
+    const { title, description, color } = body
+
+    if (!title) {
+      return c.json({ error: 'Title is required' }, 400)
+    }
+
+    // Verify ownership
+    const { data: existingBox } = await supabase
+      .from('suggestion_boxes')
+      .select('owner_id')
+      .eq('id', boxId)
+      .single()
+
+    if (!existingBox || existingBox.owner_id !== user.id) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+
+    const { data, error } = await supabase
+      .from('suggestion_boxes')
+      .update({
+        title,
+        description: description || '',
+        color: color || '#3B82F6'
+      })
+      .eq('id', boxId)
+      .select()
+      .single()
+
+    if (error) {
+      console.log('Update suggestion box error:', error)
+      return c.json({ error: error.message }, 500)
+    }
+
+    return c.json({ box: data })
+  } catch (error) {
+    console.log('Update suggestion box error:', error)
     return c.json({ error: 'Internal server error' }, 500)
   }
 })
@@ -149,28 +202,27 @@ app.delete('/make-server-01962606/suggestion-boxes/:id', async (c) => {
     }
 
     const boxId = c.req.param('id')
-    const box = await kv.get(`suggestion_box_${boxId}`)
+    
+    // Verify ownership
+    const { data: existingBox } = await supabase
+      .from('suggestion_boxes')
+      .select('owner_id')
+      .eq('id', boxId)
+      .single()
 
-    if (!box) {
-      return c.json({ error: 'Suggestion box not found' }, 404)
-    }
-
-    if (box.owner_id !== user.id) {
+    if (!existingBox || existingBox.owner_id !== user.id) {
       return c.json({ error: 'Forbidden' }, 403)
     }
 
-    // Delete the box
-    await kv.del(`suggestion_box_${boxId}`)
+    // Delete the box (cascade will delete suggestions)
+    const { error } = await supabase
+      .from('suggestion_boxes')
+      .delete()
+      .eq('id', boxId)
 
-    // Remove from user's boxes list
-    const userBoxes = await kv.get(`user_boxes_${user.id}`) || []
-    const updatedBoxes = userBoxes.filter((id: string) => id !== boxId)
-    await kv.set(`user_boxes_${user.id}`, updatedBoxes)
-
-    // Delete all suggestions for this box
-    const suggestions = await kv.getByPrefix(`suggestion_${boxId}_`)
-    for (const suggestion of suggestions) {
-      await kv.del(`suggestion_${boxId}_${suggestion.id}`)
+    if (error) {
+      console.log('Delete suggestion box error:', error)
+      return c.json({ error: error.message }, 500)
     }
 
     return c.json({ success: true })
@@ -233,24 +285,33 @@ app.post('/make-server-01962606/suggestions', async (c) => {
     }
 
     // Verify box exists
-    const box = await kv.get(`suggestion_box_${boxId}`)
+    const { data: box } = await supabase
+      .from('suggestion_boxes')
+      .select('id')
+      .eq('id', boxId)
+      .single()
+
     if (!box) {
       return c.json({ error: 'Suggestion box not found' }, 404)
     }
 
-    const suggestionId = crypto.randomUUID()
-    const suggestionData = {
-      id: suggestionId,
-      box_id: boxId,
-      content,
-      rating: rating || null,
-      is_anonymous: isAnonymous || false,
-      created_at: new Date().toISOString()
+    const { data, error } = await supabase
+      .from('suggestions')
+      .insert({
+        box_id: boxId,
+        content,
+        rating: rating || null,
+        is_anonymous: isAnonymous !== undefined ? isAnonymous : true
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.log('Create suggestion error:', error)
+      return c.json({ error: error.message }, 500)
     }
 
-    await kv.set(`suggestion_${boxId}_${suggestionId}`, suggestionData)
-
-    return c.json({ suggestion: suggestionData })
+    return c.json({ suggestion: data })
   } catch (error) {
     console.log('Create suggestion error:', error)
     return c.json({ error: 'Internal server error' }, 500)
@@ -267,13 +328,28 @@ app.get('/make-server-01962606/suggestions/:boxId', async (c) => {
     const boxId = c.req.param('boxId')
 
     // Verify user owns this box
-    const box = await kv.get(`suggestion_box_${boxId}`)
+    const { data: box } = await supabase
+      .from('suggestion_boxes')
+      .select('owner_id')
+      .eq('id', boxId)
+      .single()
+
     if (!box || box.owner_id !== user.id) {
       return c.json({ error: 'Forbidden' }, 403)
     }
 
-    const suggestions = await kv.getByPrefix(`suggestion_${boxId}_`)
-    return c.json({ suggestions })
+    const { data, error } = await supabase
+      .from('suggestions')
+      .select('*')
+      .eq('box_id', boxId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      console.log('Get suggestions error:', error)
+      return c.json({ error: error.message }, 500)
+    }
+
+    return c.json({ suggestions: data })
   } catch (error) {
     console.log('Get suggestions error:', error)
     return c.json({ error: 'Internal server error' }, 500)
@@ -295,25 +371,42 @@ app.post('/make-server-01962606/suggestions/:suggestionId/rate', async (c) => {
       return c.json({ error: 'Rating must be between 1 and 5' }, 400)
     }
 
-    // Find the suggestion
-    const suggestions = await kv.getByPrefix(`suggestion_`)
-    const suggestion = suggestions.find(s => s.id === suggestionId)
-
+    // Get the suggestion to find the box
+    const { data: suggestion } = await supabase
+      .from('suggestions')
+      .select('box_id')
+      .eq('id', suggestionId)
+      .single()
+    
     if (!suggestion) {
       return c.json({ error: 'Suggestion not found' }, 404)
     }
 
     // Verify user owns the box
-    const box = await kv.get(`suggestion_box_${suggestion.box_id}`)
+    const { data: box } = await supabase
+      .from('suggestion_boxes')
+      .select('owner_id')
+      .eq('id', suggestion.box_id)
+      .single()
+
     if (!box || box.owner_id !== user.id) {
       return c.json({ error: 'Forbidden' }, 403)
     }
 
     // Update suggestion with admin rating
-    suggestion.admin_rating = rating
-    await kv.set(`suggestion_${suggestion.box_id}_${suggestion.id}`, suggestion)
+    const { data, error } = await supabase
+      .from('suggestions')
+      .update({ admin_rating: rating })
+      .eq('id', suggestionId)
+      .select()
+      .single()
 
-    return c.json({ suggestion })
+    if (error) {
+      console.log('Rate suggestion error:', error)
+      return c.json({ error: error.message }, 500)
+    }
+
+    return c.json({ suggestion: data })
   } catch (error) {
     console.log('Rate suggestion error:', error)
     return c.json({ error: 'Internal server error' }, 500)
@@ -330,16 +423,25 @@ app.get('/make-server-01962606/export/:boxId', async (c) => {
     const boxId = c.req.param('boxId')
 
     // Verify user owns this box
-    const box = await kv.get(`suggestion_box_${boxId}`)
+    const { data: box } = await supabase
+      .from('suggestion_boxes')
+      .select('owner_id')
+      .eq('id', boxId)
+      .single()
+
     if (!box || box.owner_id !== user.id) {
       return c.json({ error: 'Forbidden' }, 403)
     }
 
-    const suggestions = await kv.getByPrefix(`suggestion_${boxId}_`)
-
+    const { data: suggestions } = await supabase
+      .from('suggestions')
+      .select('*')
+      .eq('box_id', boxId)
+      .order('created_at', { ascending: false })
+    
     // Generate CSV content
     const csvHeader = 'ID,Content,Rating,Admin Rating,Anonymous,Created At\n'
-    const csvRows = suggestions.map(s =>
+    const csvRows = (suggestions || []).map(s => 
       `"${s.id}","${s.content.replace(/"/g, '""')}","${s.rating || ''}","${s.admin_rating || ''}","${s.is_anonymous}","${s.created_at}"`
     ).join('\n')
 
