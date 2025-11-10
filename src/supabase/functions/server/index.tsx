@@ -1,3 +1,5 @@
+// @ts-nocheck
+// This is a Deno Edge Function - TypeScript errors are expected in VS Code
 import { Hono } from 'npm:hono'
 import { cors } from 'npm:hono/cors'
 import { logger } from 'npm:hono/logger'
@@ -19,13 +21,13 @@ async function verifyAuth(request: Request) {
   if (!accessToken) {
     return null;
   }
-  
+
   const { data: { user }, error } = await supabase.auth.getUser(accessToken);
   if (error || !user) {
     console.log('Authorization error:', error);
     return null;
   }
-  
+
   return user;
 }
 
@@ -230,6 +232,48 @@ app.delete('/make-server-01962606/suggestion-boxes/:id', async (c) => {
   }
 })
 
+app.put('/make-server-01962606/suggestion-boxes/:id', async (c) => {
+  try {
+    const user = await verifyAuth(c.req.raw);
+    if (!user) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+
+    const boxId = c.req.param('id')
+    const body = await c.req.json()
+    const { title, description, color } = body
+
+    if (!title) {
+      return c.json({ error: 'Title is required' }, 400)
+    }
+
+    const box = await kv.get(`suggestion_box_${boxId}`)
+
+    if (!box) {
+      return c.json({ error: 'Suggestion box not found' }, 404)
+    }
+
+    if (box.owner_id !== user.id) {
+      return c.json({ error: 'Forbidden' }, 403)
+    }
+
+    // Update the box data
+    const updatedBoxData = {
+      ...box,
+      title,
+      description: description || '',
+      color: color || '#3B82F6'
+    }
+
+    await kv.set(`suggestion_box_${boxId}`, updatedBoxData)
+
+    return c.json({ box: updatedBoxData })
+  } catch (error) {
+    console.log('Update suggestion box error:', error)
+    return c.json({ error: 'Internal server error' }, 500)
+  }
+})
+
 // Suggestion routes
 app.post('/make-server-01962606/suggestions', async (c) => {
   try {
@@ -282,7 +326,7 @@ app.get('/make-server-01962606/suggestions/:boxId', async (c) => {
     }
 
     const boxId = c.req.param('boxId')
-    
+
     // Verify user owns this box
     const { data: box } = await supabase
       .from('suggestion_boxes')
@@ -377,7 +421,7 @@ app.get('/make-server-01962606/export/:boxId', async (c) => {
     }
 
     const boxId = c.req.param('boxId')
-    
+
     // Verify user owns this box
     const { data: box } = await supabase
       .from('suggestion_boxes')
@@ -400,7 +444,7 @@ app.get('/make-server-01962606/export/:boxId', async (c) => {
     const csvRows = (suggestions || []).map(s => 
       `"${s.id}","${s.content.replace(/"/g, '""')}","${s.rating || ''}","${s.admin_rating || ''}","${s.is_anonymous}","${s.created_at}"`
     ).join('\n')
-    
+
     const csvContent = csvHeader + csvRows
 
     return new Response(csvContent, {

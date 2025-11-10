@@ -116,8 +116,8 @@ export function CreateBoxForm({ onSubmit, onCancel, editBox }: CreateBoxFormProp
                       onClick={() => setFormData({ ...formData, color: color.value })}
                       className={`
                         flex items-center gap-2 p-3 rounded-lg border-2 transition-all
-                        ${formData.color === color.value 
-                          ? 'border-gray-400 bg-gray-50' 
+                        ${formData.color === color.value
+                          ? 'border-gray-400 bg-gray-50'
                           : 'border-gray-200 hover:border-gray-300'
                         }
                       `}
@@ -134,7 +134,7 @@ export function CreateBoxForm({ onSubmit, onCancel, editBox }: CreateBoxFormProp
 
               <div className="border rounded-lg p-4 bg-gray-50">
                 <h4 className="text-sm text-gray-700 mb-2">Preview</h4>
-                <div 
+                <div
                   className="p-4 rounded-lg border-2 bg-white"
                   style={{ borderColor: formData.color }}
                 >

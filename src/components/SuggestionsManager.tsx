@@ -253,13 +253,13 @@ export function SuggestionsManager({ box, onBack, onLogout }: SuggestionsManager
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-2">
+                      {/* <div className="flex items-center gap-2">
                         <span className="text-sm text-gray-600">Your Rating:</span>
                         <StarRating 
                           rating={suggestion.admin_rating} 
                           onRate={(rating) => handleRateSuggestion(suggestion.id, rating)}
                         />
-                      </div>
+                      </div> */}
                     </div>
                   </div>
                 </CardContent>
