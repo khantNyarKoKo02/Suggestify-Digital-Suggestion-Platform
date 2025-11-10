@@ -5,7 +5,7 @@ import { Textarea } from './ui/textarea'
 import { Label } from './ui/label'
 import { Star, MessageSquare, CheckCircle, Sparkles, Send } from 'lucide-react'
 import { toast } from 'sonner'
-import { projectId, publicAnonKey } from '../utils/supabase/info'
+import { supabase } from '../utils/supabase/client'
 
 interface SuggestionBox {
   id: string
@@ -77,37 +77,21 @@ export function PublicSubmissionPage({ boxId }: PublicSubmissionPageProps) {
 
   const loadBox = async () => {
     try {
-      const url = `https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestion-boxes/${boxId}`
-      console.log('Fetching suggestion box from:', url)
-      console.log('Box ID:', boxId)
-      console.log('Project ID:', projectId)
+      const { data, error } = await supabase
+        .from('suggestion_boxes')
+        .select('*')
+        .eq('id', boxId)
+        .single()
 
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`
-        }
-      })
-
-      console.log('Response status:', response.status)
-      console.log('Response ok:', response.ok)
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Error response:', errorText)
-        try {
-          const error = JSON.parse(errorText)
-          console.error('Parsed error:', error)
-          toast.error(`Suggestion box not found: ${error.error || 'Unknown error'}`)
-        } catch {
-          toast.error(`Suggestion box not found (${response.status})`)
-        }
+      if (error || !data) {
+        console.error('Error loading box:', error)
+        toast.error('Suggestion box not found')
         return
       }
 
-      const result = await response.json()
-      console.log('Loaded box:', result)
-      setBox(result.box)
-    } catch {
+      setBox(data)
+    } catch (error) {
+      console.error('Load box error:', error)
       toast.error('Failed to load suggestion box')
     } finally {
       setIsLoading(false)
@@ -125,23 +109,18 @@ export function PublicSubmissionPage({ boxId }: PublicSubmissionPageProps) {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch(`https://${projectId}.supabase.co/functions/v1/make-server-01962606/suggestions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${publicAnonKey}`
-        },
-        body: JSON.stringify({
-          boxId,
+      const { error } = await supabase
+        .from('suggestions')
+        .insert({
+          box_id: boxId,
           content: formData.content,
           rating: formData.rating > 0 ? formData.rating : null,
-          isAnonymous: true
+          is_anonymous: true
         })
-      })
 
-      if (!response.ok) {
-        const error = await response.json()
-        toast.error('Failed to submit suggestion: ' + error.error)
+      if (error) {
+        console.error('Submit error:', error)
+        toast.error('Failed to submit suggestion: ' + error.message)
         return
       }
 
