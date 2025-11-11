@@ -329,7 +329,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                           View
                         </Button>
 
-                        <Button
+                        {/* <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
@@ -340,7 +340,7 @@ export function AdminDashboard({ user, onLogout }: AdminDashboardProps) {
                         >
                           <Edit className="h-3 w-3" />
                           Edit
-                        </Button>
+                        </Button> */}
 
                         <Button
                           variant="outline"
